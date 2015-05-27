@@ -317,10 +317,87 @@ ecma_builtin_object_object_is_extensible (ecma_value_t this_arg, /**< 'this' arg
  *         Returned value must be freed with ecma_free_completion_value.
  */
 static ecma_completion_value_t
-ecma_builtin_object_object_keys (ecma_value_t this_arg, /**< 'this' argument */
+ecma_builtin_object_object_keys (ecma_value_t this_arg __attr_unused___, /**< 'this' argument */
                                  ecma_value_t arg) /**< routine's argument */
 {
-  ECMA_BUILTIN_CP_UNIMPLEMENTED (this_arg, arg);
+  ecma_completion_value_t ret_value = ecma_make_empty_completion_value ();
+
+  if (!ecma_is_value_object (arg))
+  {
+    /* 1. */
+    ret_value = ecma_make_throw_obj_completion_value (ecma_new_standard_error (ECMA_ERROR_TYPE));
+  }
+  else
+  {
+    ecma_object_t *obj_p = ecma_get_object_from_value (arg);
+
+    /* 2. */
+    ecma_completion_value_t new_array = ecma_op_create_array_object (NULL, 0, false);
+    ecma_object_t *new_array_p = ecma_get_object_from_completion_value (new_array);
+
+    /* 4. */
+    uint32_t index = 0;
+
+    /* 5. */
+    for (ecma_property_t *property_p = ecma_get_property_list (obj_p);
+         property_p != NULL;
+         property_p = ECMA_GET_POINTER (ecma_property_t, property_p->next_property_p), index++)
+    {
+      if (property_p->type == ECMA_PROPERTY_INTERNAL
+          || !ecma_is_property_enumerable (property_p))
+      {
+        continue;
+      }
+
+      ecma_string_t *property_name_p;
+
+      if (property_p->type == ECMA_PROPERTY_NAMEDDATA)
+      {
+        property_name_p = ECMA_GET_NON_NULL_POINTER (ecma_string_t,
+                                                     property_p->u.named_data_property.name_p);
+      }
+      else if (property_p->type == ECMA_PROPERTY_NAMEDACCESSOR)
+      {
+        property_name_p = ECMA_GET_NON_NULL_POINTER (ecma_string_t,
+                                                     property_p->u.named_accessor_property.name_p);
+      }
+
+      JERRY_ASSERT (property_name_p != NULL);
+
+      /* 5.a */
+      ecma_string_t *index_string_p = ecma_new_ecma_string_from_uint32 (index);
+
+      ecma_property_descriptor_t item_prop_desc = ecma_make_empty_property_descriptor ();
+      {
+        item_prop_desc.is_value_defined = true;
+        item_prop_desc.value = ecma_make_string_value (property_name_p);
+
+        item_prop_desc.is_writable_defined = true;
+        item_prop_desc.is_writable = true;
+
+        item_prop_desc.is_enumerable_defined = true;
+        item_prop_desc.is_enumerable = true;
+
+        item_prop_desc.is_configurable_defined = true;
+        item_prop_desc.is_configurable = true;
+      }
+
+      ecma_completion_value_t completion = ecma_op_object_define_own_property (new_array_p,
+                                                                               index_string_p,
+                                                                               &item_prop_desc,
+                                                                               false);
+
+      JERRY_ASSERT (ecma_is_completion_value_normal_true (completion)
+                    || ecma_is_completion_value_normal_false (completion));
+
+      ecma_deref_ecma_string (index_string_p);
+    }
+
+    /* 6. */
+    ret_value = new_array;
+  }
+
+  return ret_value;
 } /* ecma_builtin_object_object_keys */
 
 /**
